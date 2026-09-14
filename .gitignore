@@ -1,0 +1,12 @@
+# 依赖不提交：这个包运行时不依赖任何 node_modules
+node_modules/
+
+# 但 lib/ 必须提交 —— git 安装不会跑构建，lib/client.js 就是成品
+!lib/
+
+# 编辑器 / 系统杂物
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

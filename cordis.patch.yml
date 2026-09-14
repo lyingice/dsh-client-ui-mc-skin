@@ -1,0 +1,22 @@
+# ============================================================================
+# dsh-client-ui-mc-skin —— DSH bundle patch
+# ============================================================================
+# 这是插件的"挂载声明"。DSH 启动时按 bundle 层栈叠加各插件 patch，
+# 本文件把本插件作为一行插入 Web profile 的配置树。
+#
+# 这一行是"裸插件"（只给包名）：Host 半边 exports["."] = lib/index.js 在本进程里跑
+# ——它注册一条字体路由 /dsh-mc-skin/font.ttf，把 16 MB 的像素字体按需发给浏览器；
+# package.json 里的 dsh.client 声明让浏览器半边
+# （exports["./client"] = lib/client.js）在 Web GUI 里加载。
+#
+# 注意：Host 半边只在进程启动时 import 一次，所以改完 lib/index.js 必须重启
+# dsh web；浏览器半边是每次开页面从磁盘读的，改完刷新即可。
+#
+# 安装（有本文件 + package.json 的 dsh.bundle.patch，会被 dsh 自动登记进
+# dsh.profile.bundles，不再需要手工改 profile）：
+#   dsh plugin --profile web add link:<本目录绝对路径>
+# ============================================================================
+
+- insert:
+    - id: ui-mc-skin
+      name: dsh-client-ui-mc-skin

@@ -1,0 +1,51 @@
+{
+  "name": "dsh-client-ui-mc-skin",
+  "version": "1.1.2",
+  "description": "Minecraft-styled theme for the DeepSeek Harness Web client — pixel bevels, MC GUI palette, on/off switch, 16-colour chat text, and an optional Minecraft AE pixel font streamed on demand by the host half. · 为 DSH Web 客户端准备的 Minecraft 风格主题：像素立体按钮、MC 调色板、开关图、十六色聊天字体，以及可选的 Minecraft AE 像素字体。",
+  "type": "module",
+  "main": "lib/index.js",
+  "license": "MIT",
+  "keywords": [
+    "deepseek",
+    "harness",
+    "dsh",
+    "dsh-plugin",
+    "theme",
+    "minecraft",
+    "mc"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-settings-general",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "platform": "web"
+    }
+  },
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "src",
+    "assets",
+    "build.mjs",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "prepack": "node build.mjs"
+  }
+}
