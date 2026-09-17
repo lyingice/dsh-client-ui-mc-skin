@@ -1,8 +1,12 @@
 # dsh-client-ui-mc-skin
 
-给 DeepSeek Harness Web 客户端用的 **Minecraft 风格主题**：像素立体按钮、MC GUI 调色板、on/off 开关图、十六色聊天字体，以及**可选的 Minecraft AE 像素字体**。
+给 DeepSeek Harness Web 客户端用的 **Minecraft 风格主题**：像素立体按钮、MC GUI 调色板、on/off 开关、**可持久化的开关**，以及**可选的 Minecraft AE 像素字体**。
 
-PNG 素材已内联进 bundle（5 张 / 2552 字节）；**字体不内联**——16 MB 的 `assets/MinecraftAE-Pixel.ttf` 由本包的 Host 半边按需发货，只在开关打开时才下载。所以本包现在两半都有：`lib/index.js`（Host，一条字体路由）+ `lib/client.js`（浏览器）。
+PNG 素材已内联进 bundle（5 张 / 2552 字节）；**字体不内联**——16 MB 的 `assets/MinecraftAE-Pixel.ttf` 由本包的 Host 半边按需发货，只在开关打开时才下载。所以本包现在两半都有：`lib/index.js`（Host，字体路由 + 设置命名空间）+ `lib/client.js`（浏览器）。
+
+> **1.2.0 变更**：① 移除「MC 字体颜色」十六色调色板（用不到），默认文字配色改为固定的四层递进；
+> ② 两个开关接上 Host 用户设置文档，**重启后保留**；③ Host 半边新增设置命名空间注册。
+> 从 1.1.x 升级 **必须重启 `dsh web`** —— Host 半边只在进程启动时 import 一次。
 
 ---
 
@@ -49,7 +53,7 @@ bundle 层是启动时读取的，所以第一次装完必须重启；之后改�
 - 侧边栏左上角的标志变成 24×24 的像素图（`minecraft24x.png`），右边的 `MINECRAFT` 也是像素字体
 - 整个界面变成 MC 深色：工作区 `#313233`、对话区 `#6B6B6B`、按钮是 `#C6C6C6` 立体斜角、分页是绿板
 - 界面文字变成 Minecraft AE 像素字体
-- 设置 → 通用里多出三行：**MC 主题** / **MC 像素字体** / **MC 字体颜色**
+- 设置 → 通用里多出两行：**MC 主题** / **MC 像素字体**
 - 设置 → 模型 → 点「编辑」展开的面板是**黑底 + 亮边框**（见下文《浅色模式漏白底》）
 
 想确认字体路由本身通了，可以直接打这条 URL：
@@ -145,8 +149,156 @@ dsh plugin --profile web add github:<用户>/<仓库>#v1.0.0
 | 覆盖主题颜色 | `theme.overrideTokens(包名, tokens)`，返回 disposer |
 | 注入样式表 | `document.head` 插一个带 `data-plugin-css` 的 `<style>`，卸载时移除 |
 | 三个槽位 | `slots.register({ name, priority: -1 }, 组件)` 到 `sidebar.brand.mark` / `sidebar.brand.name` / `conversation.hero.brand.mark` |
-| 三行设置 | `slots.register` 到 `settings.general.item`（列表槽位，`order` 13 / 14 / 15） |
+| 两行设置 | `slots.register` 到 `settings.general.item`（列表槽位，`order` 13 / 14） |
 | 字体路由 | Host 半边 `webServer.register({ kind: 'exact', path: '/dsh-mc-skin/font.ttf', ... })` |
+| **开关持久化** | Host 半边 `settings.register('ui-mc-skin', schema)`；客户端 `ctx.settingsScope.bind({ namespace })` 读写 |
+
+### 开关持久化
+
+两个开关（主题、像素字体）现在存在 Host 的用户设置文档里 —— 也就是
+`$DSH_HOME/settings.yaml`（Windows 是 `C:\Users\<你>\.dsh\settings.yaml`）。
+关掉主题再重启 `dsh web`，它仍然是关着的。
+
+写进去的形状就是普通一节 YAML：
+
+```yaml
+ui-mc-skin:
+  themeEnabled: false
+  pixelFontEnabled: true
+```
+
+**两边各一半，字段名必须对齐**：
+
+| | 位置 | 作用 |
+|---|---|---|
+| Host | `src/index.js` | `settings.register('ui-mc-skin', schema)` 声明命名空间 |
+| Client | `src/client.js` | `ctx.settingsScope.bind({ namespace: 'ui-mc-skin' })` 读写同一节 |
+
+常量在两边各有一份（`SETTINGS_NAMESPACE` / `SETTINGS_FIELD_*`），
+**改一处必须改另一处** —— 这是两个 bundle 共享不了模块的老问题，
+和 `FONT_ROUTE` 一样。
+
+几个刻意的取舍：
+
+- **`settingsScope` 是可选依赖。** 拿不到时（连接处于 memory 模式、或 ui-settings
+  没装配）自动退化成纯内存行为：开关照常能用，只是不跨会话保留。插件不会因为
+  持久化能力缺席而变砖。
+- **写失败不回滚界面。** 设置文档只读、断连、revision 冲突都只记一条日志，
+  本次会话内开关仍按用户点的样子生效，下次启动回到上一次成功落盘的值。
+  让一次写入失败把用户刚点的那一下弹回去，比不持久化更糟。
+- **采纳时不回写。** 启动读到 Host 的值只用来 set 本地 store，不再写回去，
+  否则会自己触发一次无意义的写入 —— 和 `ui-theme` 的 `adopt()` 一致。
+- **先采纳再渲染。** `apply()` 里 bind + 采纳排在 `applySkin()` 之前，
+  否则会出现"先按默认值渲染一帧、再跳到存的值"的闪烁。
+
+`schemastery` 已经**不再使用** —— 见下节。本包现在**零运行时依赖**。
+
+### ⚠ Host 半边不要 import 任何外部包（`link:` 装法的致命细节）
+
+Host 半边曾经 `import z from '@deepseek-ai/schemastery'`。在 web profile 上能跑，
+**在桌面端（tauri profile）上直接 `ERR_MODULE_NOT_FOUND`** —— 整个 Host 半边加载失败，
+字体路由和设置命名空间一起消失，而且 Host 侧只报一行模块错误，界面看不出所以然。
+
+原因不是"没装"，而是**Node 解析软链时用的是真实路径**：
+
+```
+profile/node_modules/dsh-client-ui-mc-skin  →  软链  →  D:\12501\Documents\deepseek\dsh-client-ui-mc-skin
+                                                       └─ Node 从这里向上找 node_modules
+                                                          只到 D:\12501\Documents\deepseek\node_modules
+                                                          ← 够不到 dsh 自带的依赖树
+```
+
+两个 profile 的差异就在这里：
+
+| | `node_modules/@deepseek-ai/` | 结果 |
+|---|---|---|
+| **web** profile | 摊着 `schemastery`、`cosmokit` | 解析成功（**侥幸**） |
+| **tauri / 桌面端** profile | 空目录，依赖全在桌面端自带的 dsh 树里 | **解析失败** |
+
+web profile 能跑纯粹是因为 pnpm 恰好把 `schemastery` 提到了那一层。换个 profile、
+换个 pnpm 版本、换个 nodeLinker 设置，就会静默炸掉。
+
+**所以本包的 Host 半边只 import Node 内置模块**（`node:fs/promises`、`node:url`）。
+需要 dsh 的能力（`webServer`、`settings`）一律通过 `ctx` 拿，那是运行时的服务查找，
+不走 Node 的模块解析。
+
+> 如果你要给自己写的插件加 Host 半边，且打算用 `link:` 分发：
+> **先在一个和开发环境不同的 profile 上装一遍再发布**。
+> 判据很简单 —— `lib/index.js` 顶部的 `import` 只能是 `node:*`。
+
+### 为什么要自己写 schema
+
+dsh-settings 对 schema 的用法只有两处（见 `dsh-settings/lib/index.js`）：
+
+```js
+// resolve()：把「composition base + 用户层」合并后喂进来，取回补过默认值的对象
+const value = schema(mergeLayers(base, section))
+// describe()：给配置界面看的 JSON Schema
+registration.schema.toJSON()
+```
+
+所以只要「**可调用** + 有 **toJSON**」就够，不需要完整 schemastery。
+`src/index.js` 里那 30 行自包含实现满足这个契约，且对脏数据安全：
+
+| 输入 | 结果 |
+|---|---|
+| `{}` | `{themeEnabled:true, pixelFontEnabled:true}` |
+| `{themeEnabled:false}` | `{themeEnabled:false, pixelFontEnabled:true}` |
+| `{themeEnabled:'yes', pixelFontEnabled:0}` | 两个都回落默认（不做类型强转） |
+| `null` | 两个都回落默认 |
+
+**坏字段不会让整个命名空间解析失败** —— 那会导致插件加载不出来。
+
+
+### 选择器核对：类名是猜的，token 是真的
+
+主题里那批 `[class*="_xxx"]` 选择器**当初是照截图猜的**。拿 `deepseek-harness-master`
+源码核对后（脚本 `.dsh-tools/verify-selectors.mjs`），58 条里有 **37 条是死规则**——
+类名在源码里根本不存在，规则一直静默失效，不报错。
+
+原因是这些面板的类名跟猜的完全不是一个形状：
+
+| 面板 | 真实实现 | 真实类名 | 当初猜的 |
+|---|---|---|---|
+| 代码块 | `ui-primitives/markdown/CodeBlock.module.css` | `.block` `.body` `.banner` | `_codeViewer` `_codeBlock` |
+| 文件差异 | `ui-primitives/DiffBlock.module.css` | `.block` `.line` `.add` `.del` | `_diffHeader` `_lineAdd` `_diffDel` |
+| 读取面板 | `ui-primitives/ReadBlock.module.css` | `.block` `.gutter` `.line` | `_codeViewer` `_lineNumber` |
+| 终端输出 | `ui-primitives/TerminalBlock.module.css` | `.block` `.output` `.prompt` | `_terminal` `_logView` |
+
+**都是短名**（`.block`、`.line`、`.add`），根本没有 `_diff*` 这种长前缀。
+所以那 8 条规则从来没有命中过任何东西。
+
+修法是**不再猜类名，改走 token**。这四个面板的底色只来自一个 token：
+
+```
+CodeBlock.module.css   :16  background: var(--dsl-code-block-background)
+                            └─ --dsl-code-block-background: var(--dsw-alias-markdown-code-block)
+DiffBlock.module.css   :8   background: var(--dsw-alias-markdown-code-block)
+ReadBlock.module.css   :11  background: var(--dsw-alias-markdown-code-block)
+TerminalBlock.module.css:21 background: var(--dsw-alias-markdown-code-block)
+```
+
+`--dsw-alias-markdown-code-block` 浅色模式 = `bluish-50` = `rgb(249,250,251)`（近白），
+文字早被主题染成浅色 ⇒ **白底白字**。现在把这一对 token 钉成 MC 深色即可，
+一处生效、四个面板同时跟随，不再依赖任何类名。
+
+同时修掉的还有：
+
+- `_tab_` / `_tabActive_` —— 多写了个尾下划线。CSS Module 产出的是 `_tab_<hash>`，
+  尾字符是 hash 首字符而不是下划线，所以这两条也是死的。去掉尾下划线即可。
+- `[class*="Close"]` —— CSS Module 不会把类名首字母大写；真实类名是
+  `ui-primitives/Modal.module.css` 的 `.close`（全小写），编译成 `_close_<hash>`。
+- `--dsw-alias-bg-layer-4` —— `design-platform.css` 里只有 `layer-1..3`，
+  没有 `layer-4`，覆盖它等于写一个没人读的变量。
+
+改完复跑核对脚本：**58 条 → 19 条，死规则 37 → 0**（剩下 2 处是记录历史的注释文字）；
+24 个被覆盖的 token 全部真实存在。
+
+> 保留的 `[class*="_rowCard"] > [class*="_editor"]` 是**有效**的，别误删：
+> `rowCard` 在 `ui-settings-models/ModelsSection.module.css:55` 确实存在，
+> 只是它以 `styles['rowCard']` **下标形式**引用。核对脚本必须同时认
+> `styles.foo` 和 `styles['foo']` 两种写法，否则会把这条误判成死规则
+> （第一版脚本就犯了这个错）。
 
 ### 为什么品牌槽位必须写 `priority: -1`
 
@@ -248,8 +400,20 @@ html:root body{--dsw-font-family:"Minecraft AE",… !important;
 | `caption .44` | 3.6:1 | **1.8:1** |
 
 数字上"及格"不等于看着清楚 —— 用户报的「黑背景地方字体变灰看不清」就是这个。
-现在已经整体抬高：`.88 / .82 / .68`，侧边栏上分别是 10.3 / 9.2 / 6.9，中灰底上 4.6 / 4.2 / 3.4。
-**层次感要靠字号和字重，不能靠把字调到快看不见。**
+
+**1.2.0 起这套值按"最差底色"定**。对比度算的是相对亮度，所以瓶颈不是最暗的
+侧边栏，而是最亮的对话区 —— 基准取对话区，侧边栏自然满足。主色也从纯白
+`#FFFFFF` 降到 `#F2F2F2`：纯白压在中灰底上会过曝，长文阅读发涩。
+
+| 层级 | 值 | 对话区 `#6B6B6B` | 侧边栏 `#313233` |
+|---|---|---|---|
+| `primary` | `#F2F2F2` | 7.4:1 | 15.1:1 |
+| `secondary` | `.90` | 5.4:1 | 11.0:1 |
+| `tertiary` | `.80` | 4.1:1 | 8.4:1 |
+| `caption` | `.72` | 3.3:1 | 6.8:1 |
+
+层级之间靠 **8~10 个百分点的透明度差**拉开，而不是靠"调暗到快看不见"。
+**层次感要靠字号和字重。**
 
 ### 浅色模式漏白底
 
@@ -357,13 +521,97 @@ node build.mjs
 
 ## 已知限制
 
-- **开关状态不持久。** 主题开关、像素字体开关、字体颜色都存在内存里，重启回到默认（前两个默认开，颜色默认 `§f` 白）。要做持久化得接 `settings` 服务。
+- **开关状态已持久化**（1.2.0 起），但**只在 Host 提供 settings 服务时**。连接处于 memory 模式或 ui-settings 未装配时退化为内存态，重启回到默认。设置行末尾会自动据此显示或隐藏那句持久化说明。
 - **主题是深色单套。** 浅色/深色模式目前是同一组值，切换不改变外观——因为模板图本身就是深色体系。本主题会把上表那 10 个面板 token 也钉成深色，所以即使应用处于**浅色模式**也不会漏白底（**只限用户报过的那几个面**，见《浅色模式漏白底》里的范围纪律）。
 - **第三方插件的自绘界面不在覆盖范围内。** 本主题只负责 DSH 自己的 token 和类名；别的插件如果写死了浅色背景，那部分仍是它自己的样子。
 - **字体文件 16 MB。** 首次开启要下 3.85 MB（gzip 后）。本机 loopback 无感，但如果哪天把 DSH 挂到网络上，这就是一笔真实流量。想变小只能做字体子集化——实测 ASCII+拉丁 602 个字形只占 60 KB，但中日韩统一表意区就要 6.2 MB，所以"只留常用字"可以做到 ~1 MB，代价是生僻字回落到系统字体。
 - **像素字体在小字号下是设计尺寸。** 这份字体是 16×16 点阵风格，12–15 px 下最锐利；界面缩放（Ctrl +/-）到非整数倍时笔画会糊。
-- **依赖内部类名后缀。** 按钮/分页/卡片等规则按 `[class*="_xxx"]` 匹配 DSH 的 CSS Module 局部名。DSH 若把这些名字改掉，对应规则会静默失效（不会报错，只是那部分回到原生样式）。
+- **依赖内部类名后缀。** 按钮/分页/卡片等规则按 `[class*="_xxx"]` 匹配 DSH 的 CSS Module 局部名。DSH 若把这些名字改掉，对应规则会静默失效（不会报错，只是那部分回到原生样式）。**别靠肉眼判断是否失效** —— 跑 `node tools/verify-selectors.mjs`，它会拿真实源码核对每一条。
 - **依赖内部槽位名。** `sidebar.brand.mark` / `sidebar.brand.name` / `conversation.hero.brand.mark` / `settings.general.item` 同理，改了就少渲染一部分。
+- **文字色不可调。** 十六色调色板已移除；想改主色就改 `src/client.js` 的 `TEXT_PRIMARY` 再 `node build.mjs`。
+
+---
+
+## 关于"像应用程序那样的界面"
+
+存在**两类**桌面端，别混淆 —— 它们的插件兼容性不同：
+
+### A. 官方桌面端（`apps/desktop`，Electron）
+
+就在 DSH 源码树里（`@deepseek-ai/dsh-desktop`，Electron 44）。它不是把网页塞进浏览器窗口：
+
+- 自带上游 Node.js 子进程跑 dsh，**不开监听端口**
+- `dsh-app://` 提供客户端资源，分帧字节管道承载 Fetch 与流式响应
+- 自带 dsh 生产依赖树 + pnpm；签名、自动更新、单实例锁齐全
+- Electron 独占 `$DSH_HOME/profiles/desktop`，与 CLI 共享 workspace/settings/credentials，
+  但**不共享**可执行包、插件激活状态、lockfile
+
+```sh
+pnpm run package:desktop:win:x64:unsigned   # 本机免签名测试包
+```
+
+产物在 `apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/`。
+正式签名需要 EV 证书 + SafeNet token，见 `apps/desktop/README.md`。
+
+> ⚠ 官方 Electron 版**不提供 `webServer`**（它的 README 明确写了 "Desktop does not
+> provide a `webServer`"）。所以在它上面本包的**字体路由不会注册**，像素字体开关会
+> 显示"加载失败"；主题配色不受影响（走 `theme.overrideTokens`，不需要 HTTP）。
+> 想在那里用像素字体，得把字体改成内联进 `lib/client.js`（代价见《为什么字体走 Host 半边》）。
+
+### B. 第三方 Tauri 桌面端（本机在用的那个）
+
+`D:\AAAai\Deepseek Harness Desktop`（`deepseek-harness-desktop`，Rust + Tauri + WebView2）。
+它**和 A 完全不是一回事**，实测差异：
+
+| | A. 官方 Electron | B. 第三方 Tauri（本机） |
+|---|---|---|
+| 端口 | 不开端口 | **开 HTTP 端口**（实测 3080） |
+| `webServer` | ❌ 无 | **✅ 有** —— 所以字体路由正常工作 |
+| profile 目录 | `profiles/desktop`（Electron 独占） | 用 `active_profile` 指向任意 profile（本机是 `web`） |
+| 原生菜单栏 | 无 | **有**（见下） |
+
+所以本包在 B 上**两半都完全生效**：配色、字体、持久化都正常。
+
+#### B 的原生菜单栏改不了
+
+B 的顶部有 `文件 / 帮助` 这类菜单，**那是 Tauri 原生菜单，不在网页 DOM 里**。
+二进制里能直接找到编译进去的菜单项与 API：
+
+```
+文件 File · 帮助 Help · 关于 Desktop About Desktop · 退出 Quit
+全屏幕 Full Screen · 运行日志 Run Logs · 检查更新 Check for Updates
+plugin:menu|  ·  set_as_app_menu  ·  MenuItem  ·  Submenu
+```
+
+判定规则很简单：**Windows 原生控件画的，CSS 够不到；`theme.overrideTokens` 也不管它。**
+插件跑在浏览器沙箱里（只能用 `React` / `ctx` / `host.call` / `styles`），
+没有任何接口能重绘宿主窗口的菜单栏。
+
+桌面端内置的 `dsh-tauri-*` 插件（`dsh-tauri-rightclick` 等）看起来能碰原生，
+是因为**桌面端为它们写死了 bridge 通道**，只开放会话/工作区/宠物/右键菜单这些，
+其中不含菜单栏定制。那条通道不是可复用的公开接口。
+
+**能改 / 不能改的分界**：
+
+| 区域 | 谁画的 | 本主题能改吗 |
+|---|---|---|
+| 侧边栏、对话区、输入框、按钮、分页 | 网页 DOM | ✅ |
+| 顶部 `文件/配置/帮助` | Windows 原生菜单 | ❌ |
+| 窗口标题栏、最小化/最大化/关闭 | Windows 原生 | ❌ |
+| 宠物、右键菜单 | 桌面端插件的网页层 | ⚠️ 能改，但那是别人的插件 |
+
+### 安装到桌面端（B）时踩过的坑
+
+1. **profile 不是 `desktop`** —— 读 `%APPDATA%\io.github.hairyf.deepseek-harness-desktop\.store.dat`
+   里的 `active_profile` 才知道实际用的是哪个（本机先是 `tauri`，后手动切成了 `web`）。
+2. **桌面端会切到兜底 profile** —— 装完插件后它新建过 `safe` profile 并切了过去
+   （`safe` 只含 9 个内置 `dsh-tauri-*` 插件，没有第三方插件），
+   表现是"插件装好了但界面毫无变化"。日志里会先出现：
+   ```
+   dsh-client-ui-mc-skin 的 bundle patch 含复杂结构，无法热挂载（需重启一次）
+   Profile manifest created with the official web template: ...\profiles\safe\package.json
+   ```
+3. **Host 半边改动必须重启** —— 它只在进程启动时 import 一次。
 
 ---
 

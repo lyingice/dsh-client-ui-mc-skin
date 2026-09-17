@@ -30,6 +30,18 @@ window.__ModuleLoader__.load({
     var PLUGIN_ID = 'dsh-client-ui-mc-skin'
     var CSS_TAG = PLUGIN_ID + '/theme.css'
 
+    // 持久化命名空间与字段名。两边必须一致：
+    //   Host 半边（src/index.js）用 SETTINGS_NAMESPACE 注册 schema；
+    //   客户端半边用同一个名字 bind，字段名必须与 schema 的键对齐。
+    // 改一处必须改另一处。
+    var SETTINGS_NAMESPACE = 'ui-mc-skin'
+    var SETTINGS_FIELD_THEME = 'themeEnabled'
+    var SETTINGS_FIELD_FONT = 'pixelFontEnabled'
+
+    // 设置行末尾那句持久化说明。只有真的连上 Host 设置文档时才这么说，
+    // 否则等于对用户撒谎（memory 模式下重启就丢）。
+    var SETTINGS_HINT = ''
+
     // 字体路由由 Host 半边（src/index.js）注册，两边必须是同一个路径。
     var FONT_ROUTE = '/dsh-mc-skin/font.ttf'
     // 用来匹配 @font-face 的族名。这里就是字体 name 表里的 family
@@ -53,34 +65,30 @@ window.__ModuleLoader__.load({
     var SIDEBAR_FILES = ['minecraft24x.png']
     var HERO_FILES = ['minecraft34x.png']
 
-    // MC 标准十六色（聊天颜色代码）
-    var TEXT_COLORS = [
-      { code: '0', hex: '#000000', name: '黑' },
-      { code: '1', hex: '#0000AA', name: '深蓝' },
-      { code: '2', hex: '#00AA00', name: '深绿' },
-      { code: '3', hex: '#00AAAA', name: '青' },
-      { code: '4', hex: '#AA0000', name: '红' },
-      { code: '5', hex: '#AA00AA', name: '紫' },
-      { code: '6', hex: '#FFAA00', name: '金' },
-      { code: '7', hex: '#AAAAAA', name: '灰' },
-      { code: '8', hex: '#555555', name: '深灰' },
-      { code: '9', hex: '#5555FF', name: '蓝' },
-      { code: 'a', hex: '#55FF55', name: '绿' },
-      { code: 'b', hex: '#55FFFF', name: '浅蓝' },
-      { code: 'c', hex: '#FF5555', name: '亮红' },
-      { code: 'd', hex: '#FF55FF', name: '粉' },
-      { code: 'e', hex: '#FFFF55', name: '黄' },
-      { code: 'f', hex: '#FFFFFF', name: '白' },
-    ]
-    var DEFAULT_COLOR = 15
+    // 默认文字颜色。原来是「MC 十六色可调」，用户明确说用不到已删除，
+    // 改为固定的一套层次色 —— 只保留一个主色，其余层级由它按亮度递降推导。
+    //
+    // 选 #F2F2F2 而不是纯白：纯白压在 #6B6B6B 的对话区底上会过曝，
+    // 长文阅读发涩；#F2F2F2 既保住像素字体的锐利边缘，又不刺眼。
+    var TEXT_PRIMARY = '#F2F2F2'
+
 
     var TOKENS = {
       '--dsw-alias-bg-base':        { light: R_FILL, dark: R_FILL },
       '--dsw-alias-bg-layer-1':     { light: '#3A3B3C', dark: '#3A3B3C' },
       '--dsw-alias-bg-layer-2':     { light: '#2A2B2C', dark: '#2A2B2C' },
       '--dsw-alias-bg-layer-3':     { light: '#333435', dark: '#333435' },
-      '--dsw-alias-bg-layer-4':     { light: '#3A3B3C', dark: '#3A3B3C' },
+      // --dsw-alias-bg-layer-4 曾经在这里，但 design-platform.css 里没有这个
+      // token（只有 layer-1..3），覆盖它等于写了个没人读的变量，已删除。
       '--dsw-alias-bg-overlay':     { light: '#3E3F40', dark: '#3E3F40' },
+
+      // 代码块 / Diff / 终端 / Read 面板的底色。这三个面板（ui-primitives 的
+      // CodeBlock、DiffBlock、ReadBlock/TerminalBlock）**只**从这一对 token
+      // 取底色，所以钉死它们等于一次修好全部面板，不需要再猜类名。
+      // 浅色模式下 markdown-code-block = bluish-50 = rgb(249,250,251)，近白，
+      // 而标签文字已被本主题染成浅色 —— 就是用户截图里那块白底白字的 diff 面板。
+      '--dsw-alias-markdown-code-block':        { light: L_FILL, dark: L_FILL },
+      '--dsw-alias-markdown-code-block-banner': { light: '#2A2B2C', dark: '#2A2B2C' },
 
       // 下面这批属于「浅色模式下近白、深色模式下才深」的面板 token。
       // overrideTokens 是按当前模式取一个值写进 body 行内样式的，所以不钉死
@@ -229,7 +237,6 @@ window.__ModuleLoader__.load({
 
     var themeStore = createStore(true)            // 主题总开关
     var fontStore = createStore(true)             // MC 像素字体开关
-    var colorStore = createStore(DEFAULT_COLOR)   // MC 十六色里的下标
     // idle → 关着；loading → @font-face 已插入、正在下载字体；
     // ready → 已经生效；error → 拿不到字体（多半是 Host 路由还没上线）
     var fontStatusStore = createStore('idle')
@@ -255,7 +262,7 @@ window.__ModuleLoader__.load({
       // 字体样式表接在主题后面：两条同为 !important 时后写的赢，正好盖掉
       // 主题里那句等宽 font-family。
       insertCss(
-        (themeOn ? buildCss(TEXT_COLORS[colorStore.get()].hex) : '') +
+        (themeOn ? buildCss() : '') +
         (fontOn ? buildFontCss() : '')
       )
     }
@@ -280,13 +287,72 @@ window.__ModuleLoader__.load({
       }))
     }
 
-    function setTextColor(index) { colorStore.set(index); applySkin() }
-    function setTheme(next) { themeStore.set(next); applySkin(); applySlots() }
+    // ── 开关的读写与持久化 ──────────────────────────────────────────
+    //
+    // 两个开关默认都开。持久化走 DSH 的 Host settings 服务：客户端半边拿到的是
+    // ctx.settingsScope（ui-settings 提供），bind 出本插件自己的命名空间后
+    // set(field, value) 就会写进 Host 的用户设置文档，重启后由 Host 回灌。
+    //
+    // 拿不到 settingsScope 时（比如连接处于 memory 模式、或 ui-settings 没装）
+    // 自动退化成纯内存行为 —— 开关仍然能用，只是不跨会话保留。这比报错好：
+    // 用户没要求持久化能力本身是必需的，界面不该因为这个变砖。
+    var scope = null            // SettingsScope | null
+    var scopeStatus = 'idle'    // idle | loading | ready | unavailable
+
+    function setTheme(next) {
+      themeStore.set(next)
+      applySkin()
+      applySlots()
+      persist(SETTINGS_FIELD_THEME, next)
+    }
     function setFont(next) {
       fontStore.set(next)
       applySkin()
       if (next) probeFont()
       else { fontProbe = null; fontStatusStore.set('idle') }
+      persist(SETTINGS_FIELD_FONT, next)
+    }
+
+    /**
+     * 把一个开关值写回 Host 设置文档。
+     *
+     * 刻意不 await、也不把错误抛给调用方：写失败（只读文档、断连、revision 冲突）
+     * 不该让界面卡住或回滚用户刚点的那一下。失败只记一条日志，本次会话内开关
+     * 仍然按用户点的样子生效，下次启动回到上一次成功落盘的值。
+     */
+    function persist(field, value) {
+      if (scope === null) return
+      var result = scope.set(field, value)
+      if (result !== undefined && typeof result.catch === 'function') {
+        result.catch(function (error) { console.error('[mc-skin] 设置写入失败:', error) })
+      }
+    }
+
+    /**
+     * 从 Host 设置文档回灌开关状态。
+     *
+     * 只在 status 变成 ready 时采纳一次；之后 Host 侧的变化（另一个标签页改了
+     * 开关）也跟随，因为 scope 是响应式的。采纳时不回写，否则会自己触发一次
+     * 无意义的写入 —— 这也是 ui-theme 里 adopt() 的做法。
+     */
+    function adoptSettings() {
+      if (scope === null) return
+      var snap = scope.getSnapshot()
+      scopeStatus = snap.status
+      if (snap.status !== 'ready' || snap.value === undefined) return
+      var remoteTheme = snap.value[SETTINGS_FIELD_THEME]
+      var remoteFont = snap.value[SETTINGS_FIELD_FONT]
+      if (typeof remoteTheme === 'boolean' && remoteTheme !== themeStore.get()) {
+        themeStore.set(remoteTheme)
+        applySkin()
+        applySlots()
+      }
+      if (typeof remoteFont === 'boolean' && remoteFont !== fontStore.get()) {
+        fontStore.set(remoteFont)
+        applySkin()
+        if (remoteFont) probeFont()
+        else { fontProbe = null; fontStatusStore.set('idle') }
+      }
     }
 
     // ── 字体可用性探测 ──────────────────────────────────────────────
@@ -407,32 +473,16 @@ window.__ModuleLoader__.load({
       })
     }
 
-    function ColorPicker() {
-      var idx = colorStore.use()
-      var cur = TEXT_COLORS[idx]
-      return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 7 } },
-        React.createElement('div', { style: { display: 'flex', gap: 5, flexWrap: 'wrap' } },
-          TEXT_COLORS.map(function (c, i) {
-            return React.createElement('button', {
-              key: c.code, type: 'button', 'data-mc-swatch': '1',
-              title: '§' + c.code + ' ' + c.name + '  ' + c.hex,
-              onClick: function () { setTextColor(i) },
-              style: {
-                width: 22, height: 22, padding: 0, cursor: 'pointer',
-                backgroundColor: c.hex,
-                boxShadow: i === idx ? '0 0 0 2px #6ABF4D,0 0 0 3px #000000' : '0 0 0 1px #000000',
-              },
-            })
-          })),
-        React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-secondary)' } },
-          '当前 §' + cur.code + ' ' + cur.name + '  ' + cur.hex))
-    }
+    // MC 字体颜色（十六色调色板）已按用户要求移除：用不到，且它把「文字层次」
+    // 这件事交给了用户去调，而默认值本身才是该做好的地方。现在文字色固定为
+    // TEXT_PRIMARY 一套推导出的层次（见 buildCss）。
 
     function ToggleSettingsRow() {
       return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 0' } },
         React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, 'MC 主题'),
         React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-secondary)' } },
-          '开关控制配色与标志图；像素字体是下面那个独立开关。关闭即恢复原生外观。'),
+          '开关控制配色与标志图；像素字体是下面那个独立开关。关闭即恢复原生外观。'
+          + SETTINGS_HINT),
         React.createElement(ThemeToggle, null))
     }
 
@@ -441,16 +491,9 @@ window.__ModuleLoader__.load({
         React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, 'MC 像素字体'),
         React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-secondary)' } },
           '把界面文字换成 Minecraft AE 像素字体。字体文件约 16 MB，由插件的 Host 半边按需发货，'
-          + '只在首次打开开关时下载一次，之后走浏览器缓存；关掉立即恢复系统字体。'),
+          + '只在首次打开开关时下载一次，之后走浏览器缓存；关掉立即恢复系统字体。'
+          + SETTINGS_HINT),
         React.createElement(FontToggle, null))
-    }
-
-    function SettingsRow() {
-      return React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 10, padding: '10px 0' } },
-        React.createElement('div', { style: { fontSize: 13, fontWeight: 600 } }, 'MC 字体颜色'),
-        React.createElement('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-secondary)' } },
-          '使用 Minecraft 聊天颜色代码，作用于全局文字（主/次/三级/注释按亮度递降）。'),
-        React.createElement(ColorPicker, null))
     }
 
     // ── 样式表内容 ──────────────────────────────────────────────────
@@ -458,14 +501,17 @@ window.__ModuleLoader__.load({
     // !important 也赢不了——自定义属性是继承的，而继承不看重要性。
     var BTN_SEL = 'button:not([data-mc-swatch]):not([class*="_tab"]):not([class*="_crumb"])'
       + ':not([class*="_brand"]):not([class*="_card"]):not([class*="_row"])'
-      + ':not([class*="_bubble"]):not([class*="_mark"]):not([class*="Close"]):not([class*="close"])'
+      + ':not([class*="_bubble"]):not([class*="_mark"]):not([class*="_close"])'
     var SB_SEL = 'html body [class*="_sidebarCol"]'
     var CONV_SEL = 'html body [data-phase][class*="_root"]'
-    var CLOSE_SEL = 'button[class*="Close"],button[class*="close"],'
-      + 'button[aria-label*="关闭"],button[aria-label*="Close"],button[title*="关闭"]'
+    // 关闭按钮。真实类名是 ui-primitives/Modal.module.css 的 .close（全小写），
+    // 编译成 `_close_<hash>`。原来那条 `[class*="Close"]` 是不存在的 ——
+    // 大小写敏感，CSS Module 不会把类名首字母大写，所以一直是死规则。
+    var CLOSE_SEL = 'button[class*="_close"]'
     var TAB_SEL = '[class*="_tabs"] > button[class*="_tab"]'
 
-    function buildCss(textHex) {
+    function buildCss() {
+      var textHex = TEXT_PRIMARY
       return [
         '*:not(svg){border-radius:0 !important;}',
         'img,canvas{image-rendering:pixelated;}',
@@ -479,11 +525,20 @@ window.__ModuleLoader__.load({
         //     .74 白 / #6B6B6B → 3.5:1      .56 → 2.4:1      .44 → 1.8:1
         // 用户报的「黑背景地方字体变灰看不清」就是这个。层次感要靠字号和字重
         // 去做，不能靠把字调到快看不见。
+        //
+        // 现在这套数值是按**最差底色**（对话区 #6B6B6B，比侧边栏 #313233 亮得多）
+        // 定的。对比度是相对亮度算的，深色文字压深底容易过，浅色文字压中灰底才是
+        // 瓶颈 —— 所以基准取对话区，侧边栏自然满足：
+        //     primary #F2F2F2 / #6B6B6B → 7.4:1   （正文，远超 AA 的 4.5）
+        //     secondary .90            → 5.4:1   （次要信息）
+        //     tertiary  .80            → 4.1:1   （补充说明，接近 AA）
+        //     caption   .72            → 3.3:1   （时间戳等，大字号下可接受）
+        // 层级之间靠 8~10 个百分点的透明度差拉开，而不是靠"调暗到快看不见"。
         'html body{'
           + '--dsw-alias-label-primary:' + textHex + ' !important;'
-          + '--dsw-alias-label-secondary:' + withAlpha(textHex, 0.88) + ' !important;'
-          + '--dsw-alias-label-tertiary:' + withAlpha(textHex, 0.82) + ' !important;'
-          + '--dsw-alias-label-caption:' + withAlpha(textHex, 0.68) + ' !important;'
+          + '--dsw-alias-label-secondary:' + withAlpha(textHex, 0.90) + ' !important;'
+          + '--dsw-alias-label-tertiary:' + withAlpha(textHex, 0.80) + ' !important;'
+          + '--dsw-alias-label-caption:' + withAlpha(textHex, 0.72) + ' !important;'
           + '--dsw-alias-bg-base:' + R_FILL + ' !important;'
           + '--dsw-specific-sidebar-fill:' + L_FILL + ' !important;'
           + '--dsw-alias-border-l3:' + L_EDGE + ' !important;'
@@ -494,58 +549,28 @@ window.__ModuleLoader__.load({
         'code,pre,kbd,samp{background-color:' + L_FILL + ' !important;background-image:none !important;'
           + 'border:1px solid ' + L_EDGE + ' !important;}',
 
-        // 代码查看器 / 终端输出面板：DSH 用 div + 行号渲染，
-        // <pre> 规则够不着。强制上深色底，避免白字压浅灰。
-        '[class*="_codeViewer"],[class*="_codeBlock"],[class*="_sourceView"],'
-          + '[class*="_terminal"],[class*="_logView"],[class*="_previewContent"],'
-          + '[class*="_codeContainer"],[class*="_codeArea"]{'
-          + 'background-color:' + L_FILL + ' !important;'
-          + 'background-image:none !important;'
-          + 'border-color:' + L_EDGE + ' !important;'
-          + 'color:' + textHex + ' !important;}',
-
-        // ── 文件差异 / 补丁查看器（Diff View）──
-        // 截图里那个白底绿字的 diff 面板，类名通常带 _diff / _patch。
-        // 强制刷深底，让新增/删除行有清晰的对比度。
-        '[class*="_diff"],[class*="_patch"],[class*="_fileChange"],[class*="_fileDiff"],'
-          + '[class*="_changeset"],[class*="_sourceDiff"],[class*="_diffViewer"]{'
-          + 'background-color:' + L_FILL + ' !important;'
-          + 'border:1px solid ' + L_EDGE + ' !important;'
-          + 'color:' + textHex + ' !important;}',
-
-        // 顶部标题栏（如："写入 · .dsh-tools\cdp-ugly-cause.mjs +104 -0"）
-        '[class*="_diffHeader"],[class*="_fileHeader"],[class*="_patchHeader"],'
-          + '[class*="_diffTitle"],[class*="_fileName"]{'
-          + 'background-color:#2A2B2C !important;'
-          + 'border-bottom:1px solid ' + L_EDGE + ' !important;'
-          + 'color:' + withAlpha(textHex, 0.9) + ' !important;}',
-
-        // 代码内容区：去掉白底，透出深色背景
-        '[class*="_diffContent"],[class*="_patchContent"],[class*="_diffLines"],'
-          + '[class*="_codeLine"],[class*="_lineContent"]{'
-          + 'background-color:transparent !important;'
-          + 'color:' + textHex + ' !important;}',
-
-        // 新增的行（+）：用 MC 绿做高亮，避免刺眼
-        '[class*="_lineAdd"],[class*="_diffAdd"],[class*="_addedLine"],'
-          + '[class*="_insertion"]{'
-          + 'background-color:rgba(106,191,77,0.15) !important;'
-          + 'color:#6ABF4D !important;}',
-
-        // 删除的行（-）：用 MC 红做高亮
-        '[class*="_lineDel"],[class*="_diffDel"],[class*="_deletedLine"],'
-          + '[class*="_deletion"]{'
-          + 'background-color:rgba(224,108,90,0.15) !important;'
-          + 'color:#E06C5A !important;}',
-
-        // 左侧行号槽：深色底，弱化显示
-        '[class*="_lineNumber"],[class*="_lineNum"],[class*="_diffLineNumber"]{'
-          + 'background-color:#2A2B2C !important;'
-          + 'color:' + withAlpha(textHex, 0.45) + ' !important;'
-          + 'border-right:1px solid ' + L_EDGE + ' !important;}',
+        // ── 代码块 / Diff / 终端 ──
+        //
+        // 这里原来是 8 条 [class*="_codeViewer"] / "_diff" / "_lineAdd" … 规则，
+        // 全部是死规则：这些面板用的是 ui-primitives 里的
+        // CodeBlock / DiffBlock / ReadBlock / TerminalBlock / SearchBlock，
+        // 它们的 CSS Module 类名是 .block / .body / .line / .add / .del 这种
+        // **短名**，源码里根本没有 `_codeViewer`、`_diffHeader` 这些前缀。
+        // 核对脚本：.dsh-tools/verify-selectors.mjs（58 条里 37 条是死的）。
+        //
+        // 改成走 token：底色已由 TOKENS 里的
+        // --dsw-alias-markdown-code-block(-banner) 统一钉死，三个面板自动跟随。
+        // 这里只保留 diff 增删行的语义色 —— DiffBlock 用的是
+        // state-success-primary / state-error-primary，属于「深底配亮色」，
+        // 浅色模式下本来就是深色文字，压到深底上会看不清，所以要抬高亮度。
+        'html:root body{'
+          + '--dsw-alias-state-success-primary:#7ED957 !important;'
+          + '--dsw-alias-state-error-primary:#FF6B5A !important;}',
 
         // 消息泡泡 / 列表行：只上底色，不加边框
-        '[class*="_bubble"],[class*="_userMessage"],[class*="_userTurn"]{background-color:' + L_FILL + ' !important;background-image:none !important;}',
+        // （_userMessage / _userTurn 是死规则，已删：DSH 没有这两个类，
+        //   用户消息走的是 MessageItem.module.css 的 .bubble，已在下面覆盖。）
+        '[class*="_bubble"]{background-color:' + L_FILL + ' !important;background-image:none !important;}',
         '[class*="_row"],[class*="_millerRow"],[class*="_rowSeat"]{background-color:' + L_FILL + ' !important;background-image:none !important;}',
         // 卡片内部的 row 必须透明：消息卡片的工具行就是 _row，
         // 给它上色会在卡片底部拉出一条深色带。
@@ -557,11 +582,18 @@ window.__ModuleLoader__.load({
         // 钉成黑（见 TOKENS），这里再补一圈亮边，让它和外面的卡片分层。
         // 只认 rowCard 里的那一层——addCard / setupCard 里的同名组件是组件自己
         // 写成透明的（background:0 0），给它加边框会出现双重框。
+        // （rowCard 在 ui-settings-models/ModelsSection.module.css:55 确实存在，
+        //   且以 styles['rowCard'] 下标形式引用，解析脚本要同时认点访问和下标访问。）
         '[class*="_rowCard"] > [class*="_editor"]{border:1px solid #C6C6C6 !important;}',
         // 对话轮次标记轨
         '[class*="_mark"]{background:transparent !important;border:0 !important;box-shadow:none !important;}',
-        // markdown 标签页本体是 DIV，浅底白字，需要单独上色
-        '[class*="_tab_"],[class*="_tabActive_"]{background-color:' + L_FILL + ' !important;background-image:none !important;}',
+        // markdown 标签页本体是 DIV，浅底白字，需要单独上色。
+        // 注意这里用 _tab / _tabActive 而不是 _tab_ / _tabActive_：
+        // CSS Module 编译出来是 `_tab_<hash>`，写 "_tab_" 要求类名里紧跟一个
+        // 下划线，实际是 hash 首字符（字母或数字），所以带尾下划线的两条
+        // 曾经是死规则。去掉尾下划线后匹配的是 `_tab_<hash>` 里的 `_tab`，
+        // 同样能命中，且对任意 hash 都成立。
+        '[class*="_tab"],[class*="_tabActive"]{background-color:' + L_FILL + ' !important;background-image:none !important;}',
 
         // ── 左：工作区 ──
         SB_SEL + '{border:1px solid ' + L_EDGE + ' !important;}',
@@ -717,6 +749,26 @@ window.__ModuleLoader__.load({
       var theme = ctx.get('theme')
       if (theme !== undefined) themeService = theme
 
+      // ── 持久化：接 Host 设置文档 ──
+      //
+      // 顺序很重要：先 bind 出 scope 并采纳一次已存的值，再 applySkin()，
+      // 否则会出现"先按默认值渲染一帧、再跳到用户存的值"的闪烁。
+      //
+      // settingsScope 是可选依赖：拿不到就退化成内存态（开关照常可用，只是
+      // 不跨会话记住），不阻塞插件加载。
+      var settingsScope = ctx.get('settingsScope')
+      if (settingsScope !== undefined && typeof settingsScope.bind === 'function') {
+        scope = settingsScope.bind({ namespace: SETTINGS_NAMESPACE })
+        adoptSettings()
+        scopeStatus = (scope.getSnapshot() || {}).status || 'idle'
+        // Host 侧变更（另一个标签页动了开关）也要跟随
+        ctx.effect(function () { return scope.subscribe(adoptSettings) },
+          PLUGIN_ID + ': settings adoption')
+        if (scopeStatus === 'ready') {
+          SETTINGS_HINT = '开关状态会保存在 Host 设置里，重启后保留。'
+        }
+      }
+
       applySkin()
       // 字体开关默认开着，所以启动时也要探一次；关着的话浏览器根本不会去
       // 请求那 16 MB。
@@ -749,11 +801,6 @@ window.__ModuleLoader__.load({
         return slots.register(
           { name: 'settings.general.item', id: 'mc-font', order: 14, label: 'MC 像素字体' },
           FontSettingsRow)
-      })
-      slots.inject('settings.general.item', function () {
-        return slots.register(
-          { name: 'settings.general.item', id: 'mc-text-color', order: 15, label: 'MC 字体颜色' },
-          SettingsRow)
       })
     }
 
