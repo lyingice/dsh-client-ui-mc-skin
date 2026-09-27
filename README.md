@@ -4,6 +4,10 @@
 
 PNG 素材已内联进 bundle（5 张 / 2552 字节）；**字体不内联**——16 MB 的 `assets/MinecraftAE-Pixel.ttf` 由本包的 Host 半边按需发货，只在开关打开时才下载。所以本包现在两半都有：`lib/index.js`（Host，字体路由 + 设置命名空间）+ `lib/client.js`（浏览器）。
 
+> **1.3.0 变更**：① 修掉字体 U+00A0–U+00FF 那 96 个坏字形导致的分隔符 `·` 显示成字母
+> （见《这个字体有 96 个字符是坏的》）；② 文件改动的增删配色分开 —— 删除用 MC 红 `#FF5555`、
+> 添加用 MC 绿 `#55FF55`。**这次只动客户端半边，刷新页面即可生效，不用重启。**
+
 > **1.2.0 变更**：① 移除「MC 字体颜色」十六色调色板（用不到），默认文字配色改为固定的四层递进；
 > ② 两个开关接上 Host 用户设置文档，**重启后保留**；③ Host 半边新增设置命名空间注册。
 > 从 1.1.x 升级 **必须重启 `dsh web`** —— Host 半边只在进程启动时 import 一次。
@@ -487,6 +491,49 @@ DSH 的设计 token 分两套：`body{...}` 是浅色值，`body[data-ds-dark-th
 所以换的字体要么内部 family 就叫这个，要么同步改 `FONT_FAMILY` 后 `node build.mjs`。
 
 想换成别的路径、或者不打包字体而是用用户自己的文件，改 `src/index.js` 里的 `FONT_PATH`。
+
+### ⚠ 这个字体有 96 个字符是坏的（U+00A0–U+00FF）
+
+`MinecraftAE-Pixel.ttf` 的 **U+00A0–U+00FF** 这一段字形是错的 —— 整段 96 个字符
+（`¡ ¢ £ § © ° ± · × ÷ § ß à á ü` 等）全被画成了**字母 "u" 的变体**：
+
+| 字符 | 本该是 | 字体里实际画的 |
+|---|---|---|
+| `·` U+00B7 | 小中点 | **字母 "u"**（包围盒 640×896） |
+| `°` U+00B0 | 小圆圈 | 同一个 "u" 形状 |
+| `×` U+00D7 | 乘号 | 同一个 "u" 形状 |
+| `¸` U+00B8 | 下加符 | **"ü"**（u 上面两点） |
+| `À` U+00C0 | A 加重音符 | **"ù"**（小写 u 加重音） |
+
+**症状**：`·` 是 DSH 界面的高频分隔符（`引用会话 · {labels}`、统计行的 `1.2k · 45 tok`），
+它显示成字母 → 用户报的「部分字体显示成拼音v」就是它（`¸` 那个 "ü" 正是拼音的 ü，
+输入法里写作 v）。
+
+**已核实正常**：ASCII 全对、CJK 汉字全对、U+0100 起（拉丁扩展 A）全对、
+平假名/片假名全对。**只有这一段**。
+
+**修法**：`@font-face` 上加 `unicode-range` 把这一段排除，让浏览器 fallback：
+
+```css
+@font-face{
+  font-family:"Minecraft AE";
+  src:url("/dsh-mc-skin/font.ttf") format("truetype");
+  unicode-range:U+0-9F,U+100-10FFFF;   /* ← 跳过 U+00A0-U+00FF */
+}
+```
+
+**为什么用 unicode-range 而不是改字体文件**：16 MB 的 TTF 要重写 cmap 得重排
+所有表偏移和校验和，算错会让整个字体加载失败（比现在还糟）。`unicode-range`
+是标准 CSS，不动字体、可逆。代价是这 96 个字符不再是像素风（但它们本来显示的就是错的）。
+
+> **别用 `document.fonts.check()` 验证这条修复** —— 实测它对 unicode-range 不敏感，
+> 排除后仍返回 `true`。要看的是**渲染宽度**：拿同一个字符在
+> `font-family:"Minecraft AE",monospace` 和 `font-family:monospace` 下各测一次，
+> 宽度相同才说明真的 fallback 了。验证脚本：`.dsh-tools/verify-unicode-range-ab.mjs`。
+>
+> 另一个坑：**测之前必须让页面真的用到那个字体**（放一个用该 font-family 的元素），
+> 否则浏览器懒加载不会去下载，`document.fonts.ready` 立刻 resolve，
+> 测到的全是 fallback —— 会得出"修复无效"的错误结论。
 
 ---
 
