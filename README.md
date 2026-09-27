@@ -2,6 +2,8 @@
 
 给 DeepSeek Harness Web 客户端用的 **Minecraft 风格主题**：像素立体按钮、MC GUI 调色板、on/off 开关、**可持久化的开关**，以及**可选的 Minecraft AE 像素字体**。
 
+<img width="1922" height="1261" alt="2ab08e71-3b39-460b-8048-4eac969e106f" src="https://github.com/user-attachments/assets/657d25e5-d27d-4f1a-8a27-fb73d751cd39" />
+
 PNG 素材已内联进 bundle（5 张 / 2552 字节）；**字体不内联**——16 MB 的 `assets/MinecraftAE-Pixel.ttf` 由本包的 Host 半边按需发货，只在开关打开时才下载。所以本包现在两半都有：`lib/index.js`（Host，字体路由 + 设置命名空间）+ `lib/client.js`（浏览器）。
 
 > **1.3.0 变更**：① 修掉字体 U+00A0–U+00FF 那 96 个坏字形导致的分隔符 `·` 显示成字母
