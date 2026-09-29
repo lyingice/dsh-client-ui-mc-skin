@@ -600,7 +600,15 @@ window.__ModuleLoader__.load({
         // 下划线，实际是 hash 首字符（字母或数字），所以带尾下划线的两条
         // 曾经是死规则。去掉尾下划线后匹配的是 `_tab_<hash>` 里的 `_tab`，
         // 同样能命中，且对任意 hash 都成立。
-        '[class*="_tab"],[class*="_tabActive"]{background-color:' + L_FILL + ' !important;background-image:none !important;}',
+        //
+        // ⚠ 必须排除 _tabLayout。那是 ui-dockkit 的标签页布局容器
+        // （ui-dockkit/src/components/TabLayout.tsx 的 css.tabLayout），
+        // 在会话里实测是 577×822 的整块 —— 它本身是 DIV 且类名含 `_tab`，
+        // 会被裸的 [class*="_tab"] 子串命中，于是整个会话区被刷成不透明
+        // #313233，pane 内容全被盖住（表现为右侧一大片"空白"，文字在容器
+        // 边界被硬切）。_tabStrip（同一个包的 role=tablist 标签条）继续
+        // 上色，那是本来想要的效果。
+        '[class*="_tab"]:not([class*="_tabLayout"]),[class*="_tabActive"]{background-color:' + L_FILL + ' !important;background-image:none !important;}',
 
         // ── 左：工作区 ──
         SB_SEL + '{border:1px solid ' + L_EDGE + ' !important;}',

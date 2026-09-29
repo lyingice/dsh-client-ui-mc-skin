@@ -1,6 +1,6 @@
 {
   "name": "dsh-client-ui-mc-skin",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Minecraft-styled theme for the DeepSeek Harness Web client — pixel bevels, MC GUI palette, on/off switch, persistent toggles, and an optional Minecraft AE pixel font streamed on demand by the host half. · 为 DSH Web 客户端准备的 Minecraft 风格主题：像素立体按钮、MC 调色板、开关图、可持久化的开关，以及可选的 Minecraft AE 像素字体。",
   "type": "module",
   "main": "lib/index.js",
