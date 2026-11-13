@@ -1,6 +1,6 @@
 {
   "name": "dsh-client-ui-mc-skin",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Minecraft Ore UI theme for the DeepSeek Harness Web client — the Bedrock Edition design language transplanted from ClastarStudio (2px near-black edges, inset top highlights, canvas #161616, panels #3c3c3c, Ore green #4c9a2a primary actions, green-bar selected tabs), pixel font, persistent toggles, and an optional Minecraft AE pixel font streamed on demand by the host half. · 为 DSH Web 客户端准备的 Minecraft Ore UI 主题：照搬 ClastarStudio 的 Ore UI 设计系统（2px 近黑硬边 + 顶部内高光、#161616 画布、#3c3c3c 面板、#4c9a2a 绿色主操作、选中标签页顶部绿条）、像素字体、可持久化的开关，以及可选的 Minecraft AE 像素字体。",
   "type": "module",
   "main": "lib/index.js",
