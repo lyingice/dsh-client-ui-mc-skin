@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build bundled lib
+        run: npm run build
+
+      - name: Ensure lib is up to date
+        run: git diff --exit-code -- lib
+
+      - name: Check JavaScript syntax
+        run: |
+          for f in build.mjs src/client.js src/index.js lib/client.js lib/index.js tools/verify-selectors.mjs; do
+            node --check "$f"
+          done
+
+      - name: Verify package contents
+        run: npm pack --dry-run

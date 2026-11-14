@@ -680,11 +680,11 @@ window.__ModuleLoader__.load({
           + '[class*="panelRow"]:hover{background-color:' + ORE_SURFACE_HI + ' !important;}',
         // 选中行：左侧一条绿 —— 不用换整块底色，这是 Clastar .nav.on 的做法
         '[class*="sessionRow"][class*="selected"],[class*="searchResultRow"][class*="selected"],'
-          + '[class*="projectRow"][class*="active"],[class*="panelRow"][class*="on"]{'
+          + '[class*="projectRow"][class*="active"]{'
           + 'background-color:' + ORE_NAVON + ' !important;'
           + 'box-shadow:inset 3px 0 0 ' + ORE_ACCENT + ',inset 0 1px 0 #ffffff10 !important;}',
         // 分区标题：照搬 .rail-title —— 小字号 + 大字距 + 大写
-        '[class*="_sectionLabel"],[class*="_railTitle"],[class*="_sectionTitle"]{'
+        '[class*="_sectionLabel"],[class*="_sectionTitle"]{'
           + 'font-size:10px !important;letter-spacing:1.7px !important;'
           + 'text-transform:uppercase !important;color:#868686 !important;font-weight:600 !important;}',
 

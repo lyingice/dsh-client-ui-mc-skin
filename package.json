@@ -12,7 +12,11 @@
     "dsh-plugin",
     "theme",
     "minecraft",
-    "mc"
+    "mc",
+    "ore-ui",
+    "minecraft-theme",
+    "pixel-font",
+    "deepseek-harness"
   ],
   "dependencies": {},
   "dsh": {
@@ -44,11 +48,28 @@
     "assets",
     "build.mjs",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "THIRD_PARTY_NOTICES.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "node build.mjs",
     "prepack": "node build.mjs",
-    "verify:selectors": "node tools/verify-selectors.mjs"
+    "verify:selectors": "node tools/verify-selectors.mjs",
+    "check:build": "node build.mjs && git diff --exit-code -- lib",
+    "test": "node build.mjs && git diff --exit-code -- lib"
+  },
+  "author": "lyingice",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lyingice/dsh-client-ui-mc-skin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lyingice/dsh-client-ui-mc-skin/issues"
+  },
+  "homepage": "https://github.com/lyingice/dsh-client-ui-mc-skin#readme",
+  "engines": {
+    "node": ">=18"
   }
 }

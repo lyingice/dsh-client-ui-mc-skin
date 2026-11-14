@@ -10,3 +10,9 @@ node_modules/
 .DS_Store
 Thumbs.db
 *.log
+
+# Local build/package artifacts
+dist/
+release/
+*.tgz
+.cache/

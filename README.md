@@ -1,10 +1,19 @@
 # dsh-client-ui-mc-skin
 
-给 DeepSeek Harness Web 客户端用的 **Minecraft / Ore UI 主题**：按基岩版新版界面语言重绘的调色板（硬直角、`#202028` 画布、`#484848` 面板、Ore 绿主操作）、像素字体、**可持久化的开关**，以及**可选的 Minecraft AE 像素字体**。
+给 DeepSeek Harness Web 客户端用的 **Minecraft / Ore UI 主题**：按基岩版新版界面语言重绘的调色板（硬直角、`#161616` 画布、`#3c3c3c` 面板、Ore 绿 `#4c9a2a` 主操作）、像素字体、**可持久化的开关**，以及**可选的 Minecraft AE 像素字体**。
+
+<p align="center">
+  <a href="https://github.com/lyingice/dsh-client-ui-mc-skin/releases"><img alt="Version" src="https://img.shields.io/github/v/release/lyingice/dsh-client-ui-mc-skin?display_name=tag&sort=semver"></a>
+  <a href="https://github.com/lyingice/dsh-client-ui-mc-skin/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/lyingice/dsh-client-ui-mc-skin/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-4c9a2a"></a>
+</p>
 
 <img width="1922" height="1261" alt="2ab08e71-3b39-460b-8048-4eac969e106f" src="https://github.com/user-attachments/assets/657d25e5-d27d-4f1a-8a27-fb73d751cd39" />
 
 PNG 素材已内联进 bundle（5 张 / 2552 字节）；**字体不内联**——16 MB 的 `assets/MinecraftAE-Pixel.ttf` 由本包的 Host 半边按需发货，只在开关打开时才下载。所以本包现在两半都有：`lib/index.js`（Host，字体路由 + 设置命名空间）+ `lib/client.js`（浏览器）。
+
+> **当前 1.5.1**：Ore UI 设计体系、标签选中态修复与宿主强调色修正。完整版本历史见 [CHANGELOG.md](CHANGELOG.md)。
+> **升级提醒**：1.1.0 起包含 Host 半边；从旧版升级必须重启 `dsh web`，Host 模块只在进程启动时 import 一次。
 
 > **1.3.0 变更**：① 修掉字体 U+00A0–U+00FF 那 96 个坏字形导致的分隔符 `·` 显示成字母
 > （见《这个字体有 96 个字符是坏的》）；② 文件改动的增删配色分开 —— 删除用 MC 红 `#FF5555`、
@@ -52,11 +61,9 @@ bundle 层是启动时读取的，所以第一次装完必须重启；之后改�
 
 ---
 
-## 设计规范：Ore UI（照搬 ClastarStudio）
+## 设计规范：Ore UI（参考 ClastarStudio）
 
-配色与形状不是自己发明的，是**照搬本机现成的一份 Ore UI 实现**：`ClastarStudio/styles/shell.css`。
-它的注释原文就写着「Ore UI：深灰平板 + 直角 + 2px 硬边；绿色主按钮」，而且 hover / active /
-selected 全套状态都是齐的——比从规范图反推更可靠。所以直接取它的变量值，不另做取舍。
+配色与形状参考 [ClastarStudio](https://github.com/lyingice/ClastarStudio) 的 Ore UI 实现，沿用其「深灰平板 + 直角 + 2px 硬边；绿色主按钮」设计语言。hover / active / selected 状态按 DSH 现有结构做适配，而不是另造一套视觉。
 
 | 用途 | 色值 | 对应 Clastar 变量 |
 | --- | --- | --- |
@@ -168,19 +175,19 @@ dsh plugin --profile web add D:\plugins\dsh-client-ui-mc-skin
 仓库**根目录就是包根目录**（`package.json` / `cordis.patch.yml` / `lib/` 都在根上），然后：
 
 ```bash
-dsh plugin --profile web add github:<用户>/<仓库>
+dsh plugin --profile web add github:lyingice/dsh-client-ui-mc-skin
 ```
 
 生产上建议**钉到 tag 或 commit**，否则别人拿到的是默认分支的浮动最新版：
 
 ```bash
-dsh plugin --profile web add github:<用户>/<仓库>#v1.0.0
+dsh plugin --profile web add github:lyingice/dsh-client-ui-mc-skin#v1.5.1
 ```
 
 上 GitHub 前的检查清单：
 
 - [ ] `lib/client.js` **和 `lib/index.js` 都必须提交**，别写进 `.gitignore`——git 安装不会跑构建
-- [ ] `assets/MinecraftAE-Pixel.ttf` 也是，别被 `*.ttf` 之类的规则误伤（本包 `.gitignore` 只忽略 `node_modules/` 和编辑器杂物）
+- [ ] `assets/MinecraftAE-Pixel.ttf` 也是，别被 `*.ttf` 之类的规则误伤（本包 `.gitignore` 只忽略依赖、构建/发布产物和编辑器杂物）
 - [ ] `cordis.patch.yml` 在仓库根，否则 `dsh` 不会把它登记进 `bundles`
 - [ ] 不要加 `prepare` 脚本：pnpm 会把它当成需要审批的构建脚本（`allowBuilds`）拦下来。本包只有 `build` / `prepack`，git 安装时都不会触发
 - [ ] `package.json` 里补上 `repository` / `homepage` / `bugs`（本包目前没有填）
@@ -714,6 +721,16 @@ plugin:menu|  ·  set_as_app_menu  ·  MenuItem  ·  Submenu
 
 ---
 
+## 开发、贡献与安全
+
+- 构建：`npm run build`；构建产物必须同步提交到 `lib/`。
+- 构建与语法检查：`npm run test`。
+- 选择器核对：`npm run verify:selectors`；需要本地 deepseek-harness 源码，CI 不执行这一步。
+- 参与前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)、[SECURITY.md](SECURITY.md) 和 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
+- 版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 许可
 
-MIT。素材（`assets/*.png`）与字体（`assets/MinecraftAE-Pixel.ttf`）由使用者提供，字体版权归其原作者，本仓库只做打包与接线。
+项目代码采用 [MIT License](LICENSE)。`assets/*.png` 与 `assets/MinecraftAE-Pixel.ttf` 的版权/授权归各自提供者，不包含在 MIT 授权内；详见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+Minecraft 是 Mojang Studios / Microsoft 的商标；本项目是独立的非官方社区主题，与官方无隶属或背书关系。

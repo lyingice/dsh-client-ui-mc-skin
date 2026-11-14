@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security report
+    url: https://github.com/lyingice/dsh-client-ui-mc-skin/security/advisories/new
+    about: 请私下报告安全漏洞，不要在公开 issue 中披露细节。
+  - name: Releases
+    url: https://github.com/lyingice/dsh-client-ui-mc-skin/releases
+    about: 下载主题发行包并查看版本说明。
